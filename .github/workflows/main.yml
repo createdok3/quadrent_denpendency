@@ -1,0 +1,77 @@
+name: Build Qdrant & Nomic Offline Bundle (Windows - CUDA)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-offline-bundle:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10.9'
+          architecture: 'x64'
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Create output directories
+        run: |
+          New-Item -ItemType Directory -Force -Path qdrant_offline_packages
+          New-Item -ItemType Directory -Force -Path offline_cache\huggingface
+          New-Item -ItemType Directory -Force -Path offline_cache\nomic_model
+
+      - name: Download Wheels with CUDA PyTorch
+        # Downloads qdrant-client, sentence-transformers, einops (required by Nomic), and CUDA PyTorch
+        run: |
+          pip download `
+            qdrant-client `
+            sentence-transformers `
+            einops `
+            huggingface_hub `
+            torch torchvision torchaudio `
+            --dest .\qdrant_offline_packages `
+            --extra-index-url https://download.pytorch.org/whl/cu124
+
+      - name: Install dependencies in CI runner
+        run: |
+          pip install --no-index --find-links .\qdrant_offline_packages `
+            qdrant-client sentence-transformers einops huggingface_hub torch
+
+      - name: Fetch and Cache Nomic 1.5 Model & Architecture Files
+        env:
+          HF_HOME: ${{ github.workspace }}\offline_cache\huggingface
+        run: |
+          python -c @"
+          import os
+          from huggingface_hub import snapshot_download
+          from sentence_transformers import SentenceTransformer
+
+          model_id = 'nomic-ai/nomic-embed-text-v1.5'
+          target_dir = r'${{ github.workspace }}\offline_cache\nomic_model'
+
+          print(f'Downloading standalone snapshot to {target_dir}...')
+          snapshot_download(
+              repo_id=model_id,
+              local_dir=target_dir,
+              local_dir_use_symlinks=False
+          )
+
+          print('Initializing SentenceTransformer to pre-compile and verify weights...')
+          SentenceTransformer(target_dir, trust_remote_code=True)
+          print('Model and custom code cached successfully!')
+          "@
+
+      - name: Upload Offline Bundle as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qdrant-nomic-offline-bundle-windows-py3.10.9
+          path: |
+            qdrant_offline_packages\
+            offline_cache\
+          retention-days: 7
