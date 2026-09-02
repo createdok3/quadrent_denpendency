@@ -1,4 +1,4 @@
-name: Build Qdrant & Nomic Offline Bundle (Windows - CUDA)
+name: Build Qdrant & Nomic Offline Bundle (Windows - CUDA 13.0)
 
 on:
   workflow_dispatch:
@@ -26,8 +26,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path offline_cache\huggingface
           New-Item -ItemType Directory -Force -Path offline_cache\nomic_model
 
-      - name: Download Wheels with CUDA PyTorch
-        # Downloads qdrant-client, sentence-transformers, einops (required by Nomic), and CUDA PyTorch
+      - name: Download Wheels with CUDA 13.0 PyTorch
         run: |
           pip download `
             qdrant-client `
@@ -36,7 +35,7 @@ jobs:
             huggingface_hub `
             torch torchvision torchaudio `
             --dest .\qdrant_offline_packages `
-            --extra-index-url https://download.pytorch.org/whl/cu124
+            --extra-index-url https://download.pytorch.org/whl/cu130
 
       - name: Install dependencies in CI runner
         run: |
@@ -70,7 +69,7 @@ jobs:
       - name: Upload Offline Bundle as Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: qdrant-nomic-offline-bundle-windows-py3.10.9
+          name: qdrant-nomic-offline-bundle-cuda130-py3.10.9
           path: |
             qdrant_offline_packages\
             offline_cache\
