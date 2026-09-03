@@ -1,0 +1,55 @@
+name: Build Offline Python 3.10 Windows Wheels
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download-offline-packages:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10.9'
+          architecture: 'x64'
+
+      - name: Upgrade pip and setup tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+
+      - name: Create output directory & requirements file
+        run: |
+          New-Item -ItemType Directory -Force -Path offline_packages
+          
+          # Writing requirements.txt directly avoids PowerShell '<' and '>' redirection errors
+          Set-Content -Path requirements.txt -Value @"
+          FuzzyTM>=0.4.0
+          requests-mock
+          numpy>1.18,<1.24
+          clyent==1.2.1
+          nbformat==5.4.0
+          "@
+          Get-Content requirements.txt
+
+      - name: Download all wheels and transitive dependencies
+        run: |
+          pip download `
+            --dest .\offline_packages `
+            --prefer-binary `
+            -r requirements.txt
+
+      - name: Verify offline bundle completeness
+        # Tests that all packages can be installed locally without any network connection
+        run: |
+          pip install --no-index --find-links .\offline_packages -r requirements.txt
+
+      - name: Upload Wheels as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: offline-packages-py310-win64
+          path: offline_packages\
+          retention-days: 7
